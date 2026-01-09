@@ -13,6 +13,100 @@
 <body>
   <div id="game"></div>
   <script src="https://cdn.jsdelivr.net/npm/modu-engine@latest/dist/modu.min.js"></script>
-  <script src="game.js"></script>
+  <script>
+    // Wait for Modu to be available
+    function initGame() {
+      if (typeof Modu === 'undefined') {
+        setTimeout(initGame, 50);
+        return;
+      }
+      
+      const game = Modu.createGame();
+      game.addPlugin(Modu.AutoRenderer, document.getElementById('game'));
+
+      let score = 0;
+      let missed = 0;
+      const maxMissed = 5;
+
+      game.defineEntity('zombie')
+        .with(Modu.Transform2D, { x: 0, y: 0 })
+        .with(Modu.Sprite, { shape: 'circle', radius: 30, color: '#2d5a27' })
+        .register();
+
+      game.defineEntity('scoreText')
+        .with(Modu.Transform2D, { x: 100, y: 30 })
+        .with(Modu.TextRenderer, { text: 'Score: 0', fontSize: 24, color: '#fff' })
+        .register();
+
+      game.defineEntity('livesText')
+        .with(Modu.Transform2D, { x: 700, y: 30 })
+        .with(Modu.TextRenderer, { text: 'Lives: 5', fontSize: 24, color: '#f44' })
+        .register();
+
+      const scoreEntity = game.spawn('scoreText');
+      const livesEntity = game.spawn('livesText');
+
+      const zombies = [];
+      let spawnTimer = 0;
+      let gameOver = false;
+
+      function spawnZombie() {
+        const z = game.spawn('zombie');
+        const transform = game.getComponent(z, Modu.Transform2D);
+        transform.x = 50 + Math.random() * 700;
+        transform.y = 50 + Math.random() * 500;
+        zombies.push({ entity: z, lifetime: 2 });
+      }
+
+      document.getElementById('game').addEventListener('click', (e) => {
+        if (gameOver) return;
+        const rect = e.target.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        
+        for (let i = zombies.length - 1; i >= 0; i--) {
+          const z = zombies[i];
+          const t = game.getComponent(z.entity, Modu.Transform2D);
+          const dx = mx - t.x;
+          const dy = my - t.y;
+          if (dx * dx + dy * dy < 900) {
+            game.destroy(z.entity);
+            zombies.splice(i, 1);
+            score += 10;
+            game.getComponent(scoreEntity, Modu.TextRenderer).text = 'Score: ' + score;
+            break;
+          }
+        }
+      });
+
+      game.onUpdate((dt) => {
+        if (gameOver) return;
+        
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawnZombie();
+          spawnTimer = Math.max(0.5, 1.5 - score / 200);
+        }
+        
+        for (let i = zombies.length - 1; i >= 0; i--) {
+          zombies[i].lifetime -= dt;
+          if (zombies[i].lifetime <= 0) {
+            game.destroy(zombies[i].entity);
+            zombies.splice(i, 1);
+            missed++;
+            game.getComponent(livesEntity, Modu.TextRenderer).text = 'Lives: ' + (maxMissed - missed);
+            if (missed >= maxMissed) {
+              gameOver = true;
+              game.getComponent(scoreEntity, Modu.TextRenderer).text = 'GAME OVER! Score: ' + score;
+            }
+          }
+        }
+      });
+
+      game.start();
+    }
+    
+    initGame();
+  </script>
 </body>
 </html>
